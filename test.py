@@ -30,7 +30,7 @@ LOGIN_URL = (
 HARDCODED_TELEOP_URL = "https://app.viam.com/teleop/679afa71e0e67e4defcab50c/machine/7ede9f18-88ec-4084-a0b7-ae931a8c90ad"
 
 # URL template for teleop pages
-TARGET_URL_TEMPLATE = "https://app.viam.com/teleop/{teleop_workspace_id}/machine/{machine_id}"
+TELEOP_URL_TEMPLATE = "https://app.viam.com/teleop/{teleop_workspace_id}/machine/{machine_id}"
 
 # OAuth credentials (for web login)
 USERNAME = os.getenv("USERNAME")
