@@ -12,34 +12,21 @@ from viam.rpc.dial import Credentials, DialOptions
 load_dotenv()
 
 # Set up logging configuration
-# Change to DEBUG for more detailed logs
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# -------------------------
 # Configuration
-# -------------------------
-# OAuth Login URL for authenticating to the web app
-# "https://auth.viam.com/admin"
-LOGIN_URL = (
-    "https://app.viam.com"
-)
+LOGIN_URL = "https://app.viam.com"
+HARDCODED_TELEOP_URL = "https://app.viam.com/teleop/679a4f421d5cd4386e27b964/machine/55200250-4b28-4981-b8eb-bcb10aaf8073"
 
-# Hardcoded teleop URL
-HARDCODED_TELEOP_URL = "https://app.viam.com/teleop/679afa71e0e67e4defcab50c/machine/7ede9f18-88ec-4084-a0b7-ae931a8c90ad"
-
-# URL template for teleop pages
-TELEOP_URL_TEMPLATE = "https://app.viam.com/teleop/{teleop_workspace_id}/machine/{machine_id}"
-
-# OAuth credentials (for web login)
-USERNAME = os.getenv("USERNAME")
-PASSWORD = os.getenv("PASSWORD")
-
+# Login credentials
+GOOGLE_EMAIL = os.getenv("GOOGLE_EMAIL")
+GOOGLE_PASSWORD = os.getenv("GOOGLE_PASSWORD")
+USE_GOOGLE_LOGIN = os.getenv("USE_GOOGLE_LOGIN", "false").lower() == "true"
 
 # Screenshot settings
-# Directory where screenshots will be saved
 SCREENSHOT_DIR = "screenshots" 
 SCREENSHOT_PATH = os.path.join(SCREENSHOT_DIR, "teleop_demo.png")
 
@@ -55,9 +42,44 @@ EMAIL_SMTP_PASSWORD = os.getenv("EMAIL_SMTP_PASSWORD")
 if not os.path.exists(SCREENSHOT_DIR):
     os.makedirs(SCREENSHOT_DIR)
 
-# -------------------------
-# Helper Functions
-# -------------------------
+async def handle_google_login(page):
+    """
+    Handles the Google login flow
+    """
+    logging.info("Starting Google login flow...")
+    
+    # Click the Google login button
+    await page.click('button:has-text("Login with Google")')
+    
+    # Wait for Google login page and enter email
+    await page.wait_for_selector('input[type="email"]')
+    await page.fill('input[type="email"]', GOOGLE_EMAIL)
+    await page.click('button:has-text("Next")')
+    
+    # Wait for password field and enter password
+    await page.wait_for_selector('input[type="password"]', timeout=5000)
+    await page.fill('input[type="password"]', GOOGLE_PASSWORD)
+    await page.click('button:has-text("Next")')
+    
+    # Wait for the login to complete
+    await page.wait_for_load_state("networkidle", timeout=30000)
+    logging.info("Google login completed")
+
+async def handle_direct_login(page):
+    """
+    Handles the direct username/password login flow
+    """
+    logging.info("Starting direct login flow...")
+    await page.wait_for_selector("#loginId", timeout=30000)
+    await page.wait_for_selector("#password", timeout=30000)
+    
+    await page.fill("#loginId", os.getenv("USERNAME"))
+    await page.fill("#password", os.getenv("PASSWORD"))
+    await page.click("button.blue.button")
+    
+    await page.wait_for_load_state("networkidle", timeout=30000)
+    logging.info("Direct login completed")
+
 async def capture_screenshot(page, teleop_url: str, output_path: str):
     """
     Navigates to a given teleop URL using an authenticated Playwright page,
@@ -90,40 +112,25 @@ def send_email(recipient: str, sender: str, smtp_config: dict, screenshot_path: 
         server.send_message(msg)
     logging.info("Email sent with screenshot attached.")
 
-# -------------------------
-# Main Function
-# -------------------------
 async def main():
-    logging.info("Starting Playwright session for OAuth demo...")
+    logging.info("Starting Playwright session...")
 
     async with async_playwright() as p:
-        logging.info("Launching browser...")
-        # Set headless to False for debugging
         browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
 
-        logging.info("Navigating to OAuth login URL: %s", LOGIN_URL)
         await page.goto(LOGIN_URL)
 
-        logging.info("Waiting for login form fields to load...")
-        await page.wait_for_selector("#loginId", timeout=30000)
-        await page.wait_for_selector("#password", timeout=30000)
-
-        logging.info("Filling in the OAuth login form...")
-        await page.fill("#loginId", USERNAME)
-        await page.fill("#password", PASSWORD)
-
-        logging.info("Clicking the submit button...")
-        await page.click("button.blue.button")
-
-        logging.info("Waiting for OAuth login to complete...")
-        await page.wait_for_load_state("networkidle", timeout=30000)
+        # Handle login based on configuration
+        if USE_GOOGLE_LOGIN:
+            await handle_google_login(page)
+        else:
+            await handle_direct_login(page)
 
         # Capture screenshot of the teleop URL
         await capture_screenshot(page, HARDCODED_TELEOP_URL, SCREENSHOT_PATH)
 
-        logging.info("Closing browser...")
         await browser.close()
 
     # Optionally send an email with the screenshot
