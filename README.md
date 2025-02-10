@@ -59,13 +59,6 @@ EMAIL_SMTP_PASSWORD=smtp_password
 
 ## Usage
 
-Create a virtual environment and install dependencies:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
 Run the script using:
 ```bash
 python3 test.py
