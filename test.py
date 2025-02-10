@@ -22,8 +22,9 @@ logging.basicConfig(
 # Configuration
 # -------------------------
 # OAuth Login URL for authenticating to the web app
+# "https://auth.viam.com/admin"
 LOGIN_URL = (
-    "https://auth.viam.com/admin"
+    "https://app.viam.com"
 )
 
 # Hardcoded teleop URL
