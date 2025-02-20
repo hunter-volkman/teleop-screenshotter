@@ -25,7 +25,7 @@ SCREENSHOT_PATH = os.path.join(SCREENSHOT_DIR, SCREENSHOT_FILENAME)
 CAPTURE_INTERVAL_SECONDS = int(os.getenv("CAPTURE_INTERVAL_SECONDS", "1800"))
 
 # Google Secret Manager configuration for sensitive data (and credentials)
-# Set to "true" to retrieve sender credentials and SMTP config from Secret Manager
+# Set to "true" to retrieve credentials and SMTP config from Secret Manager
 USE_SECRETS_MANAGER = os.getenv("USE_SECRETS_MANAGER", "true").lower() == "true"
 # Your GCP project ID (required for Secret Manager)
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
@@ -37,7 +37,7 @@ EMAIL_SMTP_SERVER_PORT_SECRET = os.getenv("EMAIL_SMTP_SERVER_PORT_SECRET", "sole
 EMAIL_SMTP_USER_SECRET = os.getenv("EMAIL_SMTP_USER_SECRET", "soleng-smtp-user")
 EMAIL_SMTP_PASSWORD_SECRET = os.getenv("EMAIL_SMTP_PASSWORD_SECRET", "soleng-smtp-password")
 
-# For Google login credentials (assumed to be used by the dedicated "soleng" account)
+# For Google login credentials (used by the dedicated "soleng" account)
 GOOGLE_EMAIL_SECRET = os.getenv("GOOGLE_EMAIL_SECRET", "soleng-google-email")
 GOOGLE_PASSWORD_SECRET = os.getenv("GOOGLE_PASSWORD_SECRET", "soleng-google-password")
 
@@ -49,6 +49,10 @@ EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER")
 EMAIL_SMTP_SERVER_PORT = os.getenv("EMAIL_SMTP_SERVER_PORT")
 EMAIL_SMTP_USER = os.getenv("EMAIL_SMTP_USER")
 EMAIL_SMTP_PASSWORD = os.getenv("EMAIL_SMTP_PASSWORD")
+
+# Direct login credentials (for Viam login)
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
 
 def access_secret(secret_id: str) -> str:
     """
@@ -96,6 +100,19 @@ async def handle_google_login(page, email: str, password: str):
     await page.wait_for_load_state("networkidle", timeout=30000)
     logging.info("Google login completed")
 
+async def handle_direct_login(page):
+    """
+    Automates the direct username/password login flow.
+    """
+    logging.info("Starting direct login flow...")
+    await page.wait_for_selector("#loginId", timeout=30000)
+    await page.wait_for_selector("#password", timeout=30000)
+    await page.fill("#loginId", USERNAME)
+    await page.fill("#password", PASSWORD)
+    await page.click("button.blue.button")
+    await page.wait_for_load_state("networkidle", timeout=30000)
+    logging.info("Direct login completed")
+
 async def capture_screenshot(page, teleop_url: str, output_path: str):
     """
     Navigates to the teleop page and captures a screenshot.
@@ -138,7 +155,7 @@ async def process_capture_and_email(google_email: str, google_password: str,
                                     teleop_url: str, screenshot_path: str,
                                     email_config: dict = None):
     """
-    Runs the browser session to log into Viam via Google login,
+    Runs the browser session to log into Viam using either Google or direct login,
     captures a screenshot, and sends an email if configured.
     """
     logging.info("Starting Playwright session...")
@@ -147,7 +164,10 @@ async def process_capture_and_email(google_email: str, google_password: str,
         context = await browser.new_context()
         page = await context.new_page()
         await page.goto(LOGIN_URL)
-        await handle_google_login(page, google_email, google_password)
+        if os.getenv("USE_GOOGLE_LOGIN", "false").lower() == "true":
+            await handle_google_login(page, google_email, google_password)
+        else:
+            await handle_direct_login(page)
         await capture_screenshot(page, teleop_url, screenshot_path)
         await browser.close()
 
@@ -210,7 +230,7 @@ async def main():
             "password": smtp_password,
         } if recipients else None
 
-    if not google_email or not google_password:
+    if (os.getenv("USE_GOOGLE_LOGIN", "false").lower() == "true" and (not google_email or not google_password)):
         logging.error("Google credentials are missing. Exiting.")
         return
 
